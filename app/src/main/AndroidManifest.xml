@@ -41,4 +41,8 @@
 
     </application>
 
+    <queries>
+        <package android:name="com.beeper.android" />
+    </queries>
+
 </manifest>
