@@ -4,11 +4,14 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import com.beeperproxy.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
@@ -52,6 +55,63 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnRequestPermissions.setOnClickListener {
             checkAndRequestPermissions()
+        }
+
+        binding.btnTestChats.setOnClickListener { runTestQuery("chats", limit = 5) }
+        binding.btnTestMessages.setOnClickListener { runTestQuery("messages", limit = 5) }
+        binding.btnTestContacts.setOnClickListener { runTestQuery("contacts", limit = 5) }
+    }
+
+    /**
+     * Queries the proxy provider directly (no ADB, no shell quoting issues).
+     * Uses Uri.Builder so params are always correctly encoded.
+     */
+    private fun runTestQuery(path: String, limit: Int = 5) {
+        val token = AuthTokenManager.getOrCreateToken(this)
+
+        val uri = Uri.Builder()
+            .scheme("content")
+            .authority("com.beeperproxy.provider")
+            .appendPath(path)
+            .appendQueryParameter("authToken", token)
+            .appendQueryParameter("limit", limit.toString())
+            .build()
+
+        Log.d("BeeperProxy", "Test query URI: $uri")
+        binding.tvTestResult.text = "Querying $path…"
+
+        try {
+            contentResolver.query(uri, null, null, null, null).use { cursor ->
+                if (cursor == null) {
+                    val msg = "cursor = null\n\nBeeper returned null — check logcat for BeeperProxy tag."
+                    binding.tvTestResult.text = msg
+                    Log.e("BeeperProxy", "Test query returned null cursor for $path")
+                    return
+                }
+
+                val rowCount = cursor.count
+                val columns = cursor.columnNames.toList()
+                Log.d("BeeperProxy", "Test [$path] rows=$rowCount columns=$columns")
+
+                if (rowCount == 0) {
+                    binding.tvTestResult.text =
+                        "✓ Cursor OK — 0 rows returned\nColumns: ${columns.joinToString()}"
+                    return
+                }
+
+                // Show first row as key=value pairs
+                val sb = StringBuilder("✓ $rowCount row(s) — showing first:\n\n")
+                cursor.moveToFirst()
+                columns.forEachIndexed { i, col ->
+                    val value = try { cursor.getString(i) } catch (e: Exception) { "<error>" }
+                    sb.append("$col = $value\n")
+                }
+                binding.tvTestResult.text = sb.toString()
+            }
+        } catch (e: Exception) {
+            val msg = "Exception: ${e.javaClass.simpleName}\n${e.message}"
+            binding.tvTestResult.text = msg
+            Log.e("BeeperProxy", "Test query exception for $path", e)
         }
     }
 
