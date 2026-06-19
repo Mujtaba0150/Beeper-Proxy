@@ -41,27 +41,16 @@ override fun query(
 ): Cursor? {
     val ctx = context ?: return errorCursor("No context")
 
-    Log.d("BeeperProxy", "=== QUERY START ===")
-    Log.d("BeeperProxy", "Incoming URI: $uri")
-
     val token = uri.getQueryParameter(AUTH_TOKEN_PARAM)
-        ?: return errorCursor("Missing authToken parameter").also {
-            Log.e("BeeperProxy", "FAIL: Missing authToken")
-        }
+        ?: return errorCursor("Missing authToken parameter")
 
     if (!AuthTokenManager.validateToken(ctx, token)) {
-        Log.e("BeeperProxy", "FAIL: Invalid token. Got: $token")
         return errorCursor("Invalid or expired authToken")
     }
 
-    val path = uri.path?.trimStart('/') ?: return errorCursor("No path specified").also {
-        Log.e("BeeperProxy", "FAIL: No path")
-    }
-
-    Log.d("BeeperProxy", "Path: $path")
+    val path = uri.path?.trimStart('/') ?: return errorCursor("No path specified")
 
     if (path !in ALLOWED_PATHS) {
-        Log.e("BeeperProxy", "FAIL: Unknown path '$path', allowed: $ALLOWED_PATHS")
         return errorCursor("Unknown path: $path. Allowed: ${ALLOWED_PATHS.joinToString()}")
     }
 
@@ -77,23 +66,19 @@ override fun query(
         beeperUriBuilder.append("?").append(params.joinToString("&"))
     }
 
-    val beeperUri = beeperUriBuilder.toString()
-    Log.d("BeeperProxy", "Forwarding to Beeper URI: $beeperUri")
+    val beeperUri = beeperUriBuilder.toString().toUri()
+    Log.d("BeeperProxy", "Forwarding to: $beeperUri")
 
     return try {
         val cursor = ctx.contentResolver.query(
-            beeperUri.toUri(),
-            projection,
-            selection,
-            selectionArgs,
-            sortOrder
+            beeperUri, projection, selection, selectionArgs, sortOrder
         )
-        Log.d("BeeperProxy", "Beeper returned cursor: $cursor")
-        Log.d("BeeperProxy", "Cursor count: ${cursor?.count ?: "null"}")
-        Log.d("BeeperProxy", "Cursor columns: ${cursor?.columnNames?.joinToString() ?: "null"}")
+        Log.d("BeeperProxy", "Cursor: $cursor")
+        Log.d("BeeperProxy", "Cursor count: ${cursor?.count}")
+        Log.d("BeeperProxy", "Cursor columns: ${cursor?.columnNames?.joinToString()}")
         cursor
     } catch (e: Exception) {
-        Log.e("BeeperProxy", "EXCEPTION calling Beeper: ${e.javaClass.name}: ${e.message}", e)
+        Log.e("BeeperProxy", "Beeper query threw exception", e)
         errorCursor("Beeper query failed: ${e.message}")
     }
 }
