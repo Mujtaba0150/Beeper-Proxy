@@ -5,6 +5,7 @@ import android.content.ContentValues
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
+import android.util.Log
 import androidx.core.net.toUri
 
 /**
@@ -26,78 +27,110 @@ class BeeperProxyProvider : ContentProvider() {
     companion object {
         private const val BEEPER_AUTHORITY = "com.beeper.api"
         private const val AUTH_TOKEN_PARAM = "authToken"
-        private val ALLOWED_PATHS = setOf("chats", "messages", "contacts",
-            "chats/count", "messages/count", "contacts/count")
+
+        private val ALLOWED_PATHS = setOf(
+            "chats",
+            "messages",
+            "contacts",
+            "chats/count",
+            "messages/count",
+            "contacts/count"
+        )
     }
 
     override fun onCreate(): Boolean = true
 
-override fun query(
-    uri: Uri,
-    projection: Array<String>?,
-    selection: String?,
-    selectionArgs: Array<String>?,
-    sortOrder: String?
-): Cursor? {
-    val ctx = context ?: return errorCursor("No context")
+    override fun query(
+        uri: Uri,
+        projection: Array<String>?,
+        selection: String?,
+        selectionArgs: Array<String>?,
+        sortOrder: String?
+    ): Cursor? {
+        val ctx = context ?: return errorCursor("No context")
 
-    val token = uri.getQueryParameter(AUTH_TOKEN_PARAM)
-        ?: return errorCursor("Missing authToken parameter")
+        val token = uri.getQueryParameter(AUTH_TOKEN_PARAM)
+            ?: return errorCursor("Missing authToken parameter")
 
-    if (!AuthTokenManager.validateToken(ctx, token)) {
-        return errorCursor("Invalid or expired authToken")
-    }
-
-    val path = uri.path?.trimStart('/') ?: return errorCursor("No path specified")
-
-    if (path !in ALLOWED_PATHS) {
-        return errorCursor("Unknown path: $path. Allowed: ${ALLOWED_PATHS.joinToString()}")
-    }
-
-    val beeperUriBuilder = StringBuilder("content://$BEEPER_AUTHORITY/$path")
-    val params = uri.queryParameterNames
-        .filter { it != AUTH_TOKEN_PARAM }
-        .mapNotNull { key ->
-            val value = uri.getQueryParameter(key)
-            if (value != null) "$key=$value" else null
+        if (!AuthTokenManager.validateToken(ctx, token)) {
+            return errorCursor("Invalid or expired authToken")
         }
 
-    if (params.isNotEmpty()) {
-        beeperUriBuilder.append("?").append(params.joinToString("&"))
-    }
+        val path = uri.path?.trimStart('/')
+            ?: return errorCursor("No path specified")
 
-    val beeperUri = beeperUriBuilder.toString().toUri()
-    Log.d("BeeperProxy", "Forwarding to: $beeperUri")
+        if (path !in ALLOWED_PATHS) {
+            return errorCursor(
+                "Unknown path: $path. Allowed: ${ALLOWED_PATHS.joinToString()}"
+            )
+        }
 
-    return try {
-        val cursor = ctx.contentResolver.query(
-            beeperUri, projection, selection, selectionArgs, sortOrder
-        )
-        Log.d("BeeperProxy", "Cursor: $cursor")
-        Log.d("BeeperProxy", "Cursor count: ${cursor?.count}")
-        Log.d("BeeperProxy", "Cursor columns: ${cursor?.columnNames?.joinToString()}")
-        cursor
-    } catch (e: Exception) {
-        Log.e("BeeperProxy", "Beeper query threw exception", e)
-        errorCursor("Beeper query failed: ${e.message}")
+        val beeperUriBuilder = StringBuilder("content://$BEEPER_AUTHORITY/$path")
+
+        val params = uri.queryParameterNames
+            .filter { it != AUTH_TOKEN_PARAM }
+            .mapNotNull { key ->
+                uri.getQueryParameter(key)?.let { value ->
+                    "$key=$value"
+                }
+            }
+
+        if (params.isNotEmpty()) {
+            beeperUriBuilder.append("?").append(params.joinToString("&"))
+        }
+
+        val beeperUri = beeperUriBuilder.toString().toUri()
+
+        Log.d("BeeperProxy", "Forwarding to: $beeperUri")
+
+        return try {
+            val cursor = ctx.contentResolver.query(
+                beeperUri,
+                projection,
+                selection,
+                selectionArgs,
+                sortOrder
+            )
+
+            Log.d("BeeperProxy", "Cursor: $cursor")
+            Log.d("BeeperProxy", "Cursor count: ${cursor?.count}")
+            Log.d(
+                "BeeperProxy",
+                "Cursor columns: ${cursor?.columnNames?.joinToString()}"
+            )
+
+            cursor
+        } catch (e: Exception) {
+            Log.e("BeeperProxy", "Beeper query threw exception", e)
+            errorCursor("Beeper query failed: ${e.message}")
+        }
     }
-}
 
     override fun insert(uri: Uri, values: ContentValues?): Uri? {
         val ctx = context ?: return null
 
-        val token = uri.getQueryParameter(AUTH_TOKEN_PARAM) ?: return null
-        if (!AuthTokenManager.validateToken(ctx, token)) return null
+        val token = uri.getQueryParameter(AUTH_TOKEN_PARAM)
+            ?: return null
 
-        val path = uri.path?.trimStart('/') ?: return null
-        if (path != "messages") return null
+        if (!AuthTokenManager.validateToken(ctx, token)) {
+            return null
+        }
+
+        val path = uri.path?.trimStart('/')
+            ?: return null
+
+        if (path != "messages") {
+            return null
+        }
 
         val beeperUriBuilder = StringBuilder("content://$BEEPER_AUTHORITY/$path")
+
         val params = uri.queryParameterNames
             .filter { it != AUTH_TOKEN_PARAM }
             .mapNotNull { key ->
-                val value = uri.getQueryParameter(key)
-                if (value != null) "$key=$value" else null
+                uri.getQueryParameter(key)?.let { value ->
+                    "$key=$value"
+                }
             }
 
         if (params.isNotEmpty()) {
@@ -105,14 +138,28 @@ override fun query(
         }
 
         return try {
-            ctx.contentResolver.insert(beeperUriBuilder.toString().toUri(), values)
-        } catch (e: Exception) {
+            ctx.contentResolver.insert(
+                beeperUriBuilder.toString().toUri(),
+                values
+            )
+        } catch (_: Exception) {
             null
         }
     }
 
-    override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<String>?): Int = 0
-    override fun delete(uri: Uri, selection: String?, selectionArgs: Array<String>?): Int = 0
+    override fun update(
+        uri: Uri,
+        values: ContentValues?,
+        selection: String?,
+        selectionArgs: Array<String>?
+    ): Int = 0
+
+    override fun delete(
+        uri: Uri,
+        selection: String?,
+        selectionArgs: Array<String>?
+    ): Int = 0
+
     override fun getType(uri: Uri): String? = null
 
     private fun errorCursor(message: String): Cursor {
