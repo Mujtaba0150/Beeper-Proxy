@@ -5,6 +5,8 @@ import android.content.ContentValues
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
+import android.os.Binder
+import android.util.Log
 import androidx.core.net.toUri
 
 /**
@@ -67,15 +69,53 @@ class BeeperProxyProvider : ContentProvider() {
             beeperUriBuilder.append("?").append(params.joinToString("&"))
         }
 
+        val beeperUri = beeperUriBuilder.toString().toUri()
+
+
+        // Log everything we're about to send to Beeper
+        Log.d("BeeperProxy", "=== Forwarding to Beeper ===")
+        Log.d("BeeperProxy", "URI: $beeperUri")
+        Log.d("BeeperProxy", "Projection: ${projection?.joinToString() ?: "null (all columns)"}")
+        Log.d("BeeperProxy", "Selection: $selection")
+        Log.d("BeeperProxy", "SelectionArgs: ${selectionArgs?.joinToString() ?: "null"}")
+        Log.d("BeeperProxy", "SortOrder: $sortOrder")
+        Log.d("BeeperProxy", "Caller UID: ${Binder.getCallingUid()}")
+        Log.d("BeeperProxy", "Our UID: ${android.os.Process.myUid()}")
+
+        // Check Beeper is installed and its provider is available
+        val pm = ctx.packageManager
+        try {
+            val info = pm.getPackageInfo("com.beeper.android", 0)
+            Log.d("BeeperProxy", "Beeper version: ${info.versionName} (${info.longVersionCode})")
+        } catch (e: Exception) {
+            Log.e("BeeperProxy", "Beeper not installed: ${e.message}")
+            return errorCursor("Beeper not installed")
+        }
+
+        val providerInfo = pm.resolveContentProvider("com.beeper.api", 0)
+        Log.d("BeeperProxy", "Provider info: $providerInfo")
+        Log.d("BeeperProxy", "Provider exported: ${providerInfo?.exported}")
+        Log.d("BeeperProxy", "Provider readPermission: ${providerInfo?.readPermission}")
+
         return try {
-            ctx.contentResolver.query(
-                beeperUriBuilder.toString().toUri(),
+            Log.d("BeeperProxy", "Calling contentResolver.query()...")
+            val cursor = ctx.contentResolver.query(
+                beeperUri,
                 projection,
                 selection,
                 selectionArgs,
                 sortOrder
             )
+            Log.d("BeeperProxy", "Query returned: cursor=$cursor")
+            if (cursor != null) {
+                Log.d("BeeperProxy", "  count=${cursor.count}")
+                Log.d("BeeperProxy", "  columns=${cursor.columnNames.joinToString()}")
+            } else {
+                Log.e("BeeperProxy", "  NULL cursor — Beeper rejected or returned nothing")
+            }
+            cursor
         } catch (e: Exception) {
+            Log.e("BeeperProxy", "Exception calling Beeper: ${e.javaClass.name}: ${e.message}", e)
             errorCursor("Beeper query failed: ${e.message}")
         }
     }
