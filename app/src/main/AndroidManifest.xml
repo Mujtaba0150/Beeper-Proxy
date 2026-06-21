@@ -22,6 +22,14 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".BuilderActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".AppsActivity"
+            android:exported="false" />
+
         <!-- Content Provider that forwards queries to Beeper -->
         <provider
             android:name=".BeeperProxyProvider"
@@ -43,6 +51,10 @@
 
     <queries>
         <package android:name="com.beeper.android" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
     </queries>
 
 </manifest>

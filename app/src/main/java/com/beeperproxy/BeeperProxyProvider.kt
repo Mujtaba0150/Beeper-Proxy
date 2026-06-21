@@ -50,6 +50,11 @@ class BeeperProxyProvider : ContentProvider() {
             return errorCursor("Invalid or expired authToken")
         }
 
+        if (AppBlacklistManager.isBlocked(ctx, callingPackage)) {
+            Log.w("BeeperProxy", "Rejected query from blacklisted package: $callingPackage")
+            return errorCursor("Caller package '$callingPackage' is blacklisted")
+        }
+
         val path = uri.path?.trimStart('/') ?: return errorCursor("No path specified")
 
         if (path !in ALLOWED_PATHS) {
@@ -82,26 +87,24 @@ class BeeperProxyProvider : ContentProvider() {
         Log.d("BeeperProxy", "Caller UID: ${Binder.getCallingUid()}")
         Log.d("BeeperProxy", "Our UID: ${android.os.Process.myUid()}")
 
-        // Check Beeper is installed and its provider is available
+        // Log Beeper provider info for diagnostics (non-blocking)
         val pm = ctx.packageManager
         try {
             val info = pm.getPackageInfo("com.beeper.android", 0)
             Log.d("BeeperProxy", "Beeper version: ${info.versionName} (${info.longVersionCode})")
+            val providerInfo = pm.resolveContentProvider("com.beeper.api", 0)
+            Log.d("BeeperProxy", "Provider exported: ${providerInfo?.exported}, readPermission: ${providerInfo?.readPermission}")
         } catch (e: Exception) {
-            Log.e("BeeperProxy", "Beeper not installed: ${e.message}")
-            return errorCursor("Beeper not installed")
+            Log.w("BeeperProxy", "Could not resolve Beeper package info (may be invisible): ${e.message}")
         }
-
-        val providerInfo = pm.resolveContentProvider("com.beeper.api", 0)
-        Log.d("BeeperProxy", "Provider info: $providerInfo")
-        Log.d("BeeperProxy", "Provider exported: ${providerInfo?.exported}")
-        Log.d("BeeperProxy", "Provider readPermission: ${providerInfo?.readPermission}")
 
         return try {
             Log.d("BeeperProxy", "Calling contentResolver.query()...")
+            // Always request all columns from Beeper — it ignores projection anyway.
+            // We enforce the caller's projection manually below.
             val cursor = ctx.contentResolver.query(
                 beeperUri,
-                projection,
+                null,
                 selection,
                 selectionArgs,
                 sortOrder
@@ -112,8 +115,26 @@ class BeeperProxyProvider : ContentProvider() {
                 Log.d("BeeperProxy", "  columns=${cursor.columnNames.joinToString()}")
             } else {
                 Log.e("BeeperProxy", "  NULL cursor — Beeper rejected or returned nothing")
+                return null
             }
-            cursor
+
+            // Post-filter: if the caller requested specific columns, build a MatrixCursor
+            // with only those columns so tools like Automate see a clean single-column result.
+            if (projection == null || projection.isEmpty()) {
+                cursor
+            } else {
+                val validCols = projection.filter { it in cursor.columnNames }
+                if (validCols.isEmpty()) return cursor
+                val matrix = MatrixCursor(validCols.toTypedArray())
+                while (cursor.moveToNext()) {
+                    val row = validCols.map { col ->
+                        cursor.getString(cursor.getColumnIndexOrThrow(col))
+                    }.toTypedArray()
+                    matrix.addRow(row)
+                }
+                cursor.close()
+                matrix
+            }
         } catch (e: Exception) {
             Log.e("BeeperProxy", "Exception calling Beeper: ${e.javaClass.name}: ${e.message}", e)
             errorCursor("Beeper query failed: ${e.message}")
@@ -125,6 +146,11 @@ class BeeperProxyProvider : ContentProvider() {
 
         val token = uri.getQueryParameter(AUTH_TOKEN_PARAM) ?: return null
         if (!AuthTokenManager.validateToken(ctx, token)) return null
+
+        if (AppBlacklistManager.isBlocked(ctx, callingPackage)) {
+            Log.w("BeeperProxy", "Rejected insert from blacklisted package: $callingPackage")
+            return null
+        }
 
         val path = uri.path?.trimStart('/') ?: return null
         if (path != "messages") return null

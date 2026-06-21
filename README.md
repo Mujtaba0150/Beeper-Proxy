@@ -59,11 +59,12 @@ The **Intent approach is cleaner** for external apps. Send a broadcast intent to
 | Extra | Required | Type | Description |
 |-------|----------|------|-------------|
 | `authToken` | ✓ | String | Your token from the proxy app |
-| `action` | ✓ | String | `query` or `insert` |
 | `path` | ✓ | String | `chats`, `messages`, `contacts`, `chats/count`, `messages/count`, `contacts/count` |
 | `params` | ✗ | String | URL-encoded query params (e.g., `limit=10&isUnread=1`) |
-| `roomId` | ✗ | String | For insert only. Room ID to send message to |
-| `text` | ✗ | String | For insert only. Message text |
+| `roomId` | ✗ | String | For INSERT only. Room ID to send message to |
+| `text` | ✗ | String | For INSERT only. Message text |
+
+> The intent **action** (`com.beeperproxy.QUERY` or `com.beeperproxy.INSERT`) determines the operation — no separate `action` extra is needed.
 
 **Result broadcast:**
 
@@ -90,7 +91,6 @@ Task: Get Unread Chats
   Package: com.beeperproxy
   Class: com.beeperproxy.BeeperIntentReceiver
   Extra: authToken = %token
-  Extra: action = query
   Extra: path = chats
   Extra: params = isUnread=1&limit=10
 
@@ -121,7 +121,6 @@ Task: Send Message via Beeper
   Package: com.beeperproxy
   Class: com.beeperproxy.BeeperIntentReceiver
   Extra: authToken = %token
-  Extra: action = insert
   Extra: path = messages
   Extra: roomId = %roomId
   Extra: text = %message
@@ -177,7 +176,6 @@ Task: List Chats and Show Titles
   Class: com.beeperproxy.BeeperIntentReceiver
   Extras:
     authToken = {token}
-    action = "query"
     path = "chats"
     params = "isUnread=1&limit=10"
   Result variable: %intent_result
@@ -212,7 +210,6 @@ Task: List Chats and Show Titles
   Class: com.beeperproxy.BeeperIntentReceiver
   Extras:
     authToken = {token}
-    action = "insert"
     path = "messages"
     roomId = {roomId}
     text = {text}

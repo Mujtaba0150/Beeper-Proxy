@@ -3,20 +3,28 @@ package com.beeperproxy
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.core.net.toUri
 import com.beeperproxy.databinding.ActivityMainBinding
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private var queryJob: Job? = null
+    private var selectedPath: String = "chats"
 
     private val requestPermissions = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -32,11 +40,11 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         setupUi()
+        setupBottomNav()
         checkAndRequestPermissions()
     }
 
     private fun setupUi() {
-        // Show the current token on launch
         val token = AuthTokenManager.getOrCreateToken(this)
         binding.tvAuthToken.text = token
 
@@ -57,18 +65,56 @@ class MainActivity : AppCompatActivity() {
             checkAndRequestPermissions()
         }
 
-        binding.btnTestChats.setOnClickListener { runTestQuery("chats", limit = 5) }
-        binding.btnTestMessages.setOnClickListener { runTestQuery("messages", limit = 5) }
-        binding.btnTestContacts.setOnClickListener { runTestQuery("contacts", limit = 5) }
+        // Test buttons — highlight selected and run query
+        val testButtons = listOf(
+            binding.btnTestChats to "chats",
+            binding.btnTestMessages to "messages",
+            binding.btnTestContacts to "contacts"
+        )
+
+        testButtons.forEach { (btn, path) ->
+            btn.setOnClickListener {
+                selectedPath = path
+                testButtons.forEach { (b, _) ->
+                    val selected = b == btn
+                    b.backgroundTintList = android.content.res.ColorStateList.valueOf(
+                        getColor(if (selected) R.color.accent else R.color.btn_secondary)
+                    )
+                    b.setTextColor(getColor(if (selected) R.color.bg_dark else R.color.text_primary))
+                }
+                runTestQuery(path)
+            }
+        }
+
+        // Trigger default selection highlight
+        binding.btnTestChats.performClick()
     }
 
-    /**
-     * Queries the proxy provider directly (no ADB, no shell quoting issues).
-     * Uses Uri.Builder so params are always correctly encoded.
-     */
-    private fun runTestQuery(path: String, limit: Int = 5) {
-        val token = AuthTokenManager.getOrCreateToken(this)
+    private fun setupBottomNav() {
+        binding.bottomNav.selectedItemId = R.id.nav_home
+        binding.bottomNav.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.nav_home -> true
+                R.id.nav_builder -> {
+                    startActivity(Intent(this, BuilderActivity::class.java))
+                    overridePendingTransition(0, 0)
+                    true
+                }
+                R.id.nav_apps -> {
+                    startActivity(Intent(this, AppsActivity::class.java))
+                    overridePendingTransition(0, 0)
+                    true
+                }
+                else -> false
+            }
+        }
+    }
 
+    private fun runTestQuery(path: String, limit: Int = 10) {
+        // Cancel any in-flight query
+        queryJob?.cancel()
+
+        val token = AuthTokenManager.getOrCreateToken(this)
         val uri = Uri.Builder()
             .scheme("content")
             .authority("com.beeperproxy.provider")
@@ -77,42 +123,59 @@ class MainActivity : AppCompatActivity() {
             .appendQueryParameter("limit", limit.toString())
             .build()
 
-        Log.d("BeeperProxy", "Test query URI: $uri")
-        binding.tvTestResult.text = "Querying $path…"
+        binding.tvLoadingLabel.text = "Querying $path…"
+        binding.groupTestLoading.visibility = View.VISIBLE
+        binding.svTestResult.visibility = View.GONE
+        setTestButtonsEnabled(false)
 
-        try {
-            contentResolver.query(uri, null, null, null, null).use { cursor ->
-                if (cursor == null) {
-                    val msg = "cursor = null\n\nBeeper returned null — check logcat for BeeperProxy tag."
-                    binding.tvTestResult.text = msg
-                    Log.e("BeeperProxy", "Test query returned null cursor for $path")
-                    return
+        queryJob = CoroutineScope(Dispatchers.IO).launch {
+            val result = try {
+                contentResolver.query(uri, null, null, null, null).use { cursor ->
+                    if (cursor == null) {
+                        "cursor = null\n\nBeeper returned null — check permissions."
+                    } else {
+                        val rowCount = cursor.count
+                        val columns = cursor.columnNames.toList()
+
+                        if (rowCount == 0) {
+                            "✓ Cursor OK — 0 rows returned\nColumns: ${columns.joinToString()}"
+                        } else {
+                            val sb = StringBuilder("✓ $rowCount row(s) — columns: ${columns.joinToString()}\n")
+                            sb.append("─".repeat(40)).append("\n")
+                            var row = 0
+                            while (cursor.moveToNext()) {
+                                sb.append("\n── Row ${++row} ──\n")
+                                columns.forEachIndexed { i, col ->
+                                    val value = try {
+                                        cursor.getString(i) ?: "<null>"
+                                    } catch (e: Exception) {
+                                        "<error>"
+                                    }
+                                    sb.append("$col = $value\n")
+                                }
+                            }
+                            sb.toString()
+                        }
+                    }
                 }
-
-                val rowCount = cursor.count
-                val columns = cursor.columnNames.toList()
-                Log.d("BeeperProxy", "Test [$path] rows=$rowCount columns=$columns")
-
-                if (rowCount == 0) {
-                    binding.tvTestResult.text =
-                        "✓ Cursor OK — 0 rows returned\nColumns: ${columns.joinToString()}"
-                    return
-                }
-
-                // Show first row as key=value pairs
-                val sb = StringBuilder("✓ $rowCount row(s) — showing first:\n\n")
-                cursor.moveToFirst()
-                columns.forEachIndexed { i, col ->
-                    val value = try { cursor.getString(i) } catch (e: Exception) { "<error>" }
-                    sb.append("$col = $value\n")
-                }
-                binding.tvTestResult.text = sb.toString()
+            } catch (e: Exception) {
+                Log.e("BeeperProxy", "Test query exception", e)
+                "Exception: ${e.javaClass.simpleName}\n${e.message}"
             }
-        } catch (e: Exception) {
-            val msg = "Exception: ${e.javaClass.simpleName}\n${e.message}"
-            binding.tvTestResult.text = msg
-            Log.e("BeeperProxy", "Test query exception for $path", e)
+
+            withContext(Dispatchers.Main) {
+                binding.tvTestResult.text = result
+                binding.groupTestLoading.visibility = View.GONE
+                binding.svTestResult.visibility = View.VISIBLE
+                setTestButtonsEnabled(true)
+            }
         }
+    }
+
+    private fun setTestButtonsEnabled(enabled: Boolean) {
+        binding.btnTestChats.isEnabled = enabled
+        binding.btnTestMessages.isEnabled = enabled
+        binding.btnTestContacts.isEnabled = enabled
     }
 
     private fun checkAndRequestPermissions() {
@@ -149,6 +212,11 @@ class MainActivity : AppCompatActivity() {
         } else {
             "Tap below to grant Beeper permissions."
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        queryJob?.cancel()
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
