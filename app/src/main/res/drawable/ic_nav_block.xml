@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+
+    <!-- Outlined circle ring (even-odd so the centre is hollow) -->
+    <path
+        android:fillColor="@android:color/white"
+        android:fillType="evenOdd"
+        android:pathData="M480,80 C261,80 80,261 80,480 C80,699 261,880 480,880 C699,880 880,699 880,480 C880,261 699,80 480,80 Z M480,160 C655,160 800,305 800,480 C800,655 655,800 480,800 C305,800 160,655 160,480 C160,305 305,160 480,160 Z" />
+
+    <!-- Diagonal slash bar (pre-rotated 45°, centred on 480,480) -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M310.3,249.5 L710.5,649.7 L649.7,710.5 L249.5,310.3 Z" />
+
+</vector>

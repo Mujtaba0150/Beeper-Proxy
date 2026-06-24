@@ -3,14 +3,15 @@ package com.beeperproxy
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
 import android.content.res.ColorStateList
 import android.net.Uri
 import android.os.Bundle
+import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
-import com.beeperproxy.databinding.ActivityBuilderBinding
+import androidx.fragment.app.Fragment
+import com.beeperproxy.databinding.FragmentBuilderBinding
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,73 +19,59 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class BuilderActivity : AppCompatActivity() {
+class BuilderFragment : Fragment() {
 
-    private lateinit var binding: ActivityBuilderBinding
+    companion object {
+        const val TAG = "BuilderFragment"
+    }
 
-    // Which operation is selected
+    private var _binding: FragmentBuilderBinding? = null
+    private val binding get() = _binding!!
+
     private var selectedOp = "chats"
-
+    private var selectedProtocol = ""
     private var testJob: Job? = null
 
-    // Output columns returned by each endpoint, per the API reference doc
     private val opColumns = mapOf(
-        "chats" to listOf(
-            "roomId", "title", "messagePreview", "senderEntityId", "protocol",
-            "isMuted", "unreadCount", "timestamp", "oneToOne"
-        ),
+        "chats" to listOf("roomId","title","messagePreview","senderEntityId","protocol","isMuted","unreadCount","timestamp","oneToOne"),
         "chats/count" to listOf("count"),
-        "messages" to listOf(
-            "roomId", "originalId", "senderContactId", "timestamp", "isSentByMe",
-            "isDeleted", "type", "text_content", "reactions", "displayName",
-            "is_search_match", "paging_offset (openAtUnread only)", "last_read (openAtUnread only)"
-        ),
+        "messages" to listOf("roomId","originalId","senderContactId","timestamp","isSentByMe","isDeleted","type","text_content","reactions","displayName","is_search_match","paging_offset (openAtUnread only)","last_read (openAtUnread only)"),
         "messages/count" to listOf("count"),
-        "contacts" to listOf(
-            "id", "roomIds", "displayName", "contactDisplayName",
-            "linkedContactId", "itsMe", "protocol"
-        ),
+        "contacts" to listOf("id","roomIds","displayName","contactDisplayName","linkedContactId","itsMe","protocol"),
         "contacts/count" to listOf("count"),
         "insert" to listOf("(no cursor) Result URI query params: roomId, messageId — or null on failure")
     )
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        binding = ActivityBuilderBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+    private val PROTO_OTHER = "\$other"
 
+    private val protocolButtons: List<Pair<() -> MaterialButton, String>> by lazy {
+        listOf(
+            { binding.btnProtoAny } to "",
+            { binding.btnProtoWhatsapp } to "whatsapp",
+            { binding.btnProtoSignal } to "signal",
+            { binding.btnProtoTelegram } to "telegram",
+            { binding.btnProtoImessage } to "imessage",
+            { binding.btnProtoInstagram } to "instagramgo",
+            { binding.btnProtoSlack } to "slack",
+            { binding.btnProtoDiscord } to "discord",
+            { binding.btnProtoSms } to "sms",
+            { binding.btnProtoOther } to PROTO_OTHER
+        )
+    }
+
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
+        _binding = FragmentBuilderBinding.inflate(inflater, container, false)
+        return binding.root
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
         setupOpButtons()
+        setupProtocolButtons()
         setupFieldListeners()
         setupActions()
-        setupBottomNav()
-
-        // Set initial state
         selectOp("chats")
     }
-
-    // ── Bottom navigation ─────────────────────────────────────────────────────
-
-    private fun setupBottomNav() {
-        binding.bottomNav.selectedItemId = R.id.nav_builder
-        binding.bottomNav.setOnItemSelectedListener { item ->
-            when (item.itemId) {
-                R.id.nav_builder -> true // already here
-                R.id.nav_home -> {
-                    startActivity(Intent(this, MainActivity::class.java))
-                    overridePendingTransition(0, 0)
-                    true
-                }
-                R.id.nav_apps -> {
-                    startActivity(Intent(this, AppsActivity::class.java))
-                    overridePendingTransition(0, 0)
-                    true
-                }
-                else -> false
-            }
-        }
-    }
-
-    // ── Operation buttons ─────────────────────────────────────────────────────
 
     private fun setupOpButtons() {
         binding.btnOpChats.setOnClickListener { selectOp("chats") }
@@ -110,17 +97,17 @@ class BuilderActivity : AppCompatActivity() {
         )
         opButtons.forEach { (btn, id) -> highlightFilledButton(btn, id == op) }
 
-        // Show/hide relevant field groups
         val isInsert = op == "insert"
         val isMessages = op == "messages" || op == "messages/count"
         val isMessagesList = op == "messages"
         val isChats = op == "chats" || op == "chats/count"
         val isContacts = op == "contacts" || op == "contacts/count"
+        val isCount = op.endsWith("/count")
 
         binding.groupInsert.visibility = if (isInsert) View.VISIBLE else View.GONE
-        binding.groupLimit.visibility = if (!isInsert) View.VISIBLE else View.GONE
-        binding.groupOffset.visibility = if (!isInsert) View.VISIBLE else View.GONE
-        binding.groupColumns.visibility = if (!isInsert) View.VISIBLE else View.GONE
+        binding.groupLimit.visibility = if (!isInsert && !isCount) View.VISIBLE else View.GONE
+        binding.groupOffset.visibility = if (!isInsert && !isCount) View.VISIBLE else View.GONE
+        binding.groupColumns.visibility = if (!isInsert && !isCount) View.VISIBLE else View.GONE
         binding.groupRoomIdsFilter.visibility = if (!isInsert) View.VISIBLE else View.GONE
 
         binding.groupIsUnread.visibility = if (isChats) View.VISIBLE else View.GONE
@@ -138,39 +125,68 @@ class BuilderActivity : AppCompatActivity() {
         binding.groupContactQuery.visibility = if (isContacts) View.VISIBLE else View.GONE
         binding.groupSenderIds.visibility = if (isContacts) View.VISIBLE else View.GONE
 
-        // Output columns for this op
         val cols = opColumns[op] ?: emptyList()
         binding.tvOutputColumns.text = cols.joinToString("\n") { "• $it" }
 
-        // Reset test result area when switching ops
         binding.svTestResult.visibility = View.GONE
         binding.groupTestLoading.visibility = View.GONE
 
+        updateRunTestButton()
         regenerate()
     }
 
-    /** Highlight a pill-style op button: accent background when selected. */
     private fun highlightFilledButton(btn: MaterialButton, selected: Boolean) {
         btn.isSelected = selected
         btn.backgroundTintList = ColorStateList.valueOf(
-            getColor(if (selected) R.color.accent else R.color.btn_secondary)
+            requireContext().getColor(if (selected) R.color.accent else R.color.btn_secondary)
         )
-        btn.setTextColor(getColor(if (selected) R.color.bg_dark else R.color.text_primary))
+        btn.setTextColor(requireContext().getColor(if (selected) R.color.bg_dark else R.color.text_primary))
     }
 
-    // ── Field change listeners → regenerate on every keystroke ───────────────
+    private fun setupProtocolButtons() {
+        protocolButtons.forEach { (btnRef, value) ->
+            btnRef().setOnClickListener {
+                selectedProtocol = value
+                val isOther = value == PROTO_OTHER
+                binding.groupProtoCustom.visibility = if (isOther) View.VISIBLE else View.GONE
+                if (!isOther) regenerate()
+                refreshProtocolButtonHighlights()
+            }
+        }
+        binding.etProtoCustom.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+            override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) { regenerate() }
+        })
+        refreshProtocolButtonHighlights()
+    }
+
+    private fun refreshProtocolButtonHighlights() {
+        protocolButtons.forEach { (btnRef, value) ->
+            val btn = btnRef()
+            val isSelected = value == selectedProtocol
+            btn.backgroundTintList = ColorStateList.valueOf(
+                requireContext().getColor(if (isSelected) R.color.accent else R.color.btn_secondary)
+            )
+            btn.setTextColor(requireContext().getColor(if (isSelected) R.color.bg_dark else R.color.text_primary))
+        }
+    }
+
+    private fun effectiveProtocol(): String {
+        if (selectedProtocol != PROTO_OTHER) return selectedProtocol
+        return binding.etProtoCustom.text.toString().trim()
+    }
 
     private fun setupFieldListeners() {
         val watcher = object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
             override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
-            override fun afterTextChanged(s: android.text.Editable?) = regenerate()
+            override fun afterTextChanged(s: android.text.Editable?) { regenerate(); updateRunTestButton() }
         }
         binding.etLimit.addTextChangedListener(watcher)
         binding.etOffset.addTextChangedListener(watcher)
         binding.etColumns.addTextChangedListener(watcher)
         binding.etRoomIdsFilter.addTextChangedListener(watcher)
-        binding.etProtocol.addTextChangedListener(watcher)
         binding.etMessageQuery.addTextChangedListener(watcher)
         binding.etSenderId.addTextChangedListener(watcher)
         binding.etContextBefore.addTextChangedListener(watcher)
@@ -187,7 +203,18 @@ class BuilderActivity : AppCompatActivity() {
         binding.cbOpenAtUnread.setOnCheckedChangeListener { _, _ -> regenerate() }
     }
 
-    // ── Copy & Test actions ───────────────────────────────────────────────────
+    private fun updateRunTestButton() {
+        if (selectedOp == "insert") {
+            val roomId = binding.etRoomId.text.toString().trim()
+            val text = binding.etMessageText.text.toString().trim()
+            val enabled = roomId.isNotEmpty() && text.isNotEmpty()
+            binding.btnTest.isEnabled = enabled
+            binding.btnTest.alpha = if (enabled) 1f else 0.45f
+        } else {
+            binding.btnTest.isEnabled = true
+            binding.btnTest.alpha = 1f
+        }
+    }
 
     private fun setupActions() {
         binding.btnCopyQuery.setOnClickListener {
@@ -196,21 +223,18 @@ class BuilderActivity : AppCompatActivity() {
         binding.btnCopyIntent.setOnClickListener {
             copyToClipboard(binding.tvGeneratedIntent.text.toString(), "Intent command copied to clipboard")
         }
-
         binding.btnTest.setOnClickListener { runTest() }
     }
 
     private fun copyToClipboard(text: String, toastMessage: String) {
         if (text.isBlank()) return
-        val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val cb = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         cb.setPrimaryClip(ClipData.newPlainText("Beeper Proxy", text))
-        Toast.makeText(this, toastMessage, Toast.LENGTH_SHORT).show()
+        Toast.makeText(requireContext(), toastMessage, Toast.LENGTH_SHORT).show()
     }
 
-    // ── Query generation ──────────────────────────────────────────────────────
-
     private fun regenerate() {
-        val token = AuthTokenManager.getOrCreateToken(this)
+        val token = AuthTokenManager.getOrCreateToken(requireContext())
         binding.tvGeneratedQuery.text = buildContentUri(token)
         binding.tvGeneratedIntent.text = buildIntentCommand(token)
     }
@@ -222,9 +246,7 @@ class BuilderActivity : AppCompatActivity() {
             .authority("com.beeperproxy.provider")
             .appendEncodedPath(path)
             .appendQueryParameter("authToken", token)
-
         applySharedParams(builder)
-
         return builder.build().toString()
     }
 
@@ -240,15 +262,11 @@ class BuilderActivity : AppCompatActivity() {
         sb.append("  --es path \"$path\"")
 
         val params = buildParamsString()
-        if (params.isNotEmpty()) {
-            sb.append(" \\\n  --es params \"$params\"")
-        }
+        if (params.isNotEmpty()) sb.append(" \\\n  --es params \"$params\"")
 
         if (selectedOp != "insert") {
             val columns = binding.etColumns.text.toString().trim()
-            if (columns.isNotEmpty()) {
-                sb.append(" \\\n  --es columns \"$columns\"")
-            }
+            if (columns.isNotEmpty()) sb.append(" \\\n  --es columns \"$columns\"")
         }
 
         if (selectedOp == "insert") {
@@ -256,12 +274,16 @@ class BuilderActivity : AppCompatActivity() {
             val text = binding.etMessageText.text.toString().trim()
             if (roomId.isNotEmpty()) sb.append(" \\\n  --es roomId \"$roomId\"")
             if (text.isNotEmpty()) sb.append(" \\\n  --es text \"$text\"")
+            if (roomId.isNotEmpty() && text.isNotEmpty()) {
+                val encodedText = android.net.Uri.encode(text)
+                sb.append("\n\n# Or using params string (Automate-style):")
+                sb.append("\n#  --es params \"roomId=$roomId&text=$encodedText\"")
+            }
         }
 
         return sb.toString()
     }
 
-    /** Collects every active filter as a list of "key=value" pairs (unencoded). */
     private fun collectParamPairs(): List<Pair<String, String>> {
         if (selectedOp == "insert") {
             val pairs = mutableListOf<Pair<String, String>>()
@@ -296,14 +318,13 @@ class BuilderActivity : AppCompatActivity() {
         }
 
         if (isChats || isContacts) {
-            val protocol = binding.etProtocol.text.toString().trim()
-            if (protocol.isNotEmpty()) pairs.add("protocol" to protocol)
+            val proto = effectiveProtocol()
+            if (proto.isNotEmpty()) pairs.add("protocol" to proto)
         }
 
         if (isMessages) {
             val msgQuery = binding.etMessageQuery.text.toString().trim()
             if (msgQuery.isNotEmpty()) pairs.add("query" to msgQuery)
-
             val senderId = binding.etSenderId.text.toString().trim()
             if (senderId.isNotEmpty()) pairs.add("senderId" to senderId)
         }
@@ -311,17 +332,14 @@ class BuilderActivity : AppCompatActivity() {
         if (isMessagesList) {
             val before = binding.etContextBefore.text.toString().trim()
             if (before.isNotEmpty()) pairs.add("contextBefore" to before)
-
             val after = binding.etContextAfter.text.toString().trim()
             if (after.isNotEmpty()) pairs.add("contextAfter" to after)
-
             if (binding.cbOpenAtUnread.isChecked) pairs.add("openAtUnread" to "true")
         }
 
         if (isContacts) {
             val contactQuery = binding.etContactQuery.text.toString().trim()
             if (contactQuery.isNotEmpty()) pairs.add("query" to contactQuery)
-
             val senderIds = binding.etSenderIds.text.toString().trim()
             if (senderIds.isNotEmpty()) pairs.add("senderIds" to senderIds)
         }
@@ -329,7 +347,6 @@ class BuilderActivity : AppCompatActivity() {
         return pairs
     }
 
-    /** Parses the Columns field into a clean array, or null if it's empty (= all columns). */
     private fun parseProjection(): Array<String>? {
         val raw = binding.etColumns.text.toString().trim()
         if (raw.isEmpty()) return null
@@ -345,29 +362,25 @@ class BuilderActivity : AppCompatActivity() {
         return collectParamPairs().joinToString("&") { (key, value) -> "$key=$value" }
     }
 
-    // ── In-app test execution ─────────────────────────────────────────────────
-
     private fun runTest() {
         testJob?.cancel()
-        val token = AuthTokenManager.getOrCreateToken(this)
-
+        val token = AuthTokenManager.getOrCreateToken(requireContext())
         binding.tvLoadingLabel.text = "Querying $selectedOp…"
         binding.groupTestLoading.visibility = View.VISIBLE
         binding.svTestResult.visibility = View.GONE
-        binding.btnTest.isEnabled = false
+        if (selectedOp == "insert") {
+            binding.btnTest.isEnabled = false
+            binding.btnTest.alpha = 0.45f
+        }
 
         testJob = CoroutineScope(Dispatchers.IO).launch {
-            val result = if (selectedOp == "insert") {
-                runInsertTest(token)
-            } else {
-                runQueryTest(token)
-            }
-
+            val result = if (selectedOp == "insert") runInsertTest(token) else runQueryTest(token)
             withContext(Dispatchers.Main) {
+                if (_binding == null) return@withContext
                 binding.tvTestResult.text = result
                 binding.groupTestLoading.visibility = View.GONE
                 binding.svTestResult.visibility = View.VISIBLE
-                binding.btnTest.isEnabled = true
+                updateRunTestButton()
             }
         }
     }
@@ -380,11 +393,10 @@ class BuilderActivity : AppCompatActivity() {
             .appendEncodedPath(path)
             .appendQueryParameter("authToken", token)
         applySharedParams(uriBuilder)
-
         val projection = parseProjection()
 
         return try {
-            contentResolver.query(uriBuilder.build(), projection, null, null, null).use { cursor ->
+            requireContext().contentResolver.query(uriBuilder.build(), projection, null, null, null).use { cursor ->
                 if (cursor == null) {
                     "✗ cursor = null\nCheck Beeper permissions."
                 } else {
@@ -400,11 +412,7 @@ class BuilderActivity : AppCompatActivity() {
                         while (cursor.moveToNext()) {
                             sb.append("\n── Row ${++row} ──\n")
                             columns.forEachIndexed { i, col ->
-                                val value = try {
-                                    cursor.getString(i) ?: "<null>"
-                                } catch (e: Exception) {
-                                    "<error>"
-                                }
+                                val value = try { cursor.getString(i) ?: "<null>" } catch (e: Exception) { "<error>" }
                                 sb.append("$col = $value\n")
                             }
                         }
@@ -420,10 +428,7 @@ class BuilderActivity : AppCompatActivity() {
     private fun runInsertTest(token: String): String {
         val roomId = binding.etRoomId.text.toString().trim()
         val text = binding.etMessageText.text.toString().trim()
-
-        if (roomId.isEmpty() || text.isEmpty()) {
-            return "✗ Room ID and message text are required for insert."
-        }
+        if (roomId.isEmpty() || text.isEmpty()) return "✗ Room ID and message text are required for insert."
 
         val uri = Uri.Builder()
             .scheme("content")
@@ -435,19 +440,17 @@ class BuilderActivity : AppCompatActivity() {
             .build()
 
         return try {
-            val result = contentResolver.insert(uri, null)
-            if (result != null) {
-                "✓ Message sent\nResult URI: $result"
-            } else {
-                "✗ Insert returned null\nCheck room ID and permissions."
-            }
+            val result = requireContext().contentResolver.insert(uri, null)
+            if (result != null) "✓ Message sent\nResult URI: $result"
+            else "✗ Insert returned null\nCheck room ID and permissions."
         } catch (e: Exception) {
             "✗ ${e.javaClass.simpleName}\n${e.message}"
         }
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
+    override fun onDestroyView() {
+        super.onDestroyView()
         testJob?.cancel()
+        _binding = null
     }
 }

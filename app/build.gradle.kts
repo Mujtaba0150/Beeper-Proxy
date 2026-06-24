@@ -46,5 +46,6 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.security.crypto)
+    implementation(libs.androidx.recyclerview)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }

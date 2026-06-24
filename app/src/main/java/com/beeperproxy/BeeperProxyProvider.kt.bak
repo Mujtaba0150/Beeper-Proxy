@@ -32,20 +32,7 @@ class BeeperProxyProvider : ContentProvider() {
             "chats/count", "messages/count", "contacts/count")
     }
 
-    override fun onCreate(): Boolean {
-        // One-time diagnostic log at startup — safe here, not in the query hot path.
-        val ctx = context ?: return true
-        try {
-            val pm = ctx.packageManager
-            val info = pm.getPackageInfo("com.beeper.android", 0)
-            Log.d("BeeperProxy", "Beeper version: ${info.versionName} (${info.longVersionCode})")
-            val providerInfo = pm.resolveContentProvider("com.beeper.api", 0)
-            Log.d("BeeperProxy", "Provider exported: ${providerInfo?.exported}, readPermission: ${providerInfo?.readPermission}")
-        } catch (e: Exception) {
-            Log.w("BeeperProxy", "Could not resolve Beeper package info: ${e.message}")
-        }
-        return true
-    }
+    override fun onCreate(): Boolean = true
 
     override fun query(
         uri: Uri,
@@ -74,25 +61,42 @@ class BeeperProxyProvider : ContentProvider() {
             return errorCursor("Unknown path: $path. Allowed: ${ALLOWED_PATHS.joinToString()}")
         }
 
-        // Rebuild URI for Beeper using Uri.Builder to ensure proper encoding.
-        val beeperUriBuilder = Uri.Builder()
-            .scheme("content")
-            .authority(BEEPER_AUTHORITY)
-            .appendEncodedPath(path)
-
-        uri.queryParameterNames
+        // Rebuild URI for Beeper, stripping our authToken param
+        val beeperUriBuilder = StringBuilder("content://$BEEPER_AUTHORITY/$path")
+        val params = uri.queryParameterNames
             .filter { it != AUTH_TOKEN_PARAM }
-            .forEach { key ->
+            .mapNotNull { key ->
                 val value = uri.getQueryParameter(key)
-                if (value != null) beeperUriBuilder.appendQueryParameter(key, value)
+                if (value != null) "$key=$value" else null
             }
 
-        val beeperUri = beeperUriBuilder.build()
+        if (params.isNotEmpty()) {
+            beeperUriBuilder.append("?").append(params.joinToString("&"))
+        }
 
+        val beeperUri = beeperUriBuilder.toString().toUri()
+
+
+        // Log everything we're about to send to Beeper
         Log.d("BeeperProxy", "=== Forwarding to Beeper ===")
         Log.d("BeeperProxy", "URI: $beeperUri")
         Log.d("BeeperProxy", "Projection: ${projection?.joinToString() ?: "null (all columns)"}")
-        Log.d("BeeperProxy", "Caller UID: ${Binder.getCallingUid()} / Our UID: ${android.os.Process.myUid()}")
+        Log.d("BeeperProxy", "Selection: $selection")
+        Log.d("BeeperProxy", "SelectionArgs: ${selectionArgs?.joinToString() ?: "null"}")
+        Log.d("BeeperProxy", "SortOrder: $sortOrder")
+        Log.d("BeeperProxy", "Caller UID: ${Binder.getCallingUid()}")
+        Log.d("BeeperProxy", "Our UID: ${android.os.Process.myUid()}")
+
+        // Log Beeper provider info for diagnostics (non-blocking)
+        val pm = ctx.packageManager
+        try {
+            val info = pm.getPackageInfo("com.beeper.android", 0)
+            Log.d("BeeperProxy", "Beeper version: ${info.versionName} (${info.longVersionCode})")
+            val providerInfo = pm.resolveContentProvider("com.beeper.api", 0)
+            Log.d("BeeperProxy", "Provider exported: ${providerInfo?.exported}, readPermission: ${providerInfo?.readPermission}")
+        } catch (e: Exception) {
+            Log.w("BeeperProxy", "Could not resolve Beeper package info (may be invisible): ${e.message}")
+        }
 
         return try {
             Log.d("BeeperProxy", "Calling contentResolver.query()...")
@@ -151,20 +155,20 @@ class BeeperProxyProvider : ContentProvider() {
         val path = uri.path?.trimStart('/') ?: return null
         if (path != "messages") return null
 
-        val beeperUriBuilder = Uri.Builder()
-            .scheme("content")
-            .authority(BEEPER_AUTHORITY)
-            .appendEncodedPath(path)
-
-        uri.queryParameterNames
+        val beeperUriBuilder = StringBuilder("content://$BEEPER_AUTHORITY/$path")
+        val params = uri.queryParameterNames
             .filter { it != AUTH_TOKEN_PARAM }
-            .forEach { key ->
+            .mapNotNull { key ->
                 val value = uri.getQueryParameter(key)
-                if (value != null) beeperUriBuilder.appendQueryParameter(key, value)
+                if (value != null) "$key=$value" else null
             }
 
+        if (params.isNotEmpty()) {
+            beeperUriBuilder.append("?").append(params.joinToString("&"))
+        }
+
         return try {
-            ctx.contentResolver.insert(beeperUriBuilder.build(), values)
+            ctx.contentResolver.insert(beeperUriBuilder.toString().toUri(), values)
         } catch (e: Exception) {
             null
         }

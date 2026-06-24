@@ -19,8 +19,10 @@ import androidx.core.net.toUri
  *   - params (String): Optional. URL-encoded query params (e.g., "limit=10&isUnread=1")
  *   - columns (String): Optional. Comma-separated list of columns to return (projection).
  *                        Leave blank to return every column. For QUERY only.
- *   - roomId (String): For INSERT. Room ID to send message to.
- *   - text (String): For INSERT. Message text.
+ *   - roomId (String): For INSERT. Room ID to send message to. Can also be passed inside `params`.
+ *   - text (String): For INSERT. Message text. Can also be passed inside `params`.
+ *     When using `params` for insert (Automate-style), set params="roomId=!id:server.com&text=hello".
+ *     Dedicated extras take precedence over values inside `params`.
  *
  * Result broadcast sent back via:
  *   - Action: com.beeperproxy.INTENT_RESULT
@@ -157,19 +159,44 @@ class BeeperIntentReceiver : BroadcastReceiver() {
                 return
             }
 
+            val params = intent.getStringExtra("params") ?: ""
+
+            // roomId and text can come either as dedicated extras OR inside the params string.
+            // Dedicated extras take precedence; params string is the fallback (Automate-style).
+            val paramsUri = if (params.isNotEmpty()) {
+                android.net.Uri.parse("content://dummy?$params")
+            } else null
+
             val roomId = intent.getStringExtra("roomId")
+                ?: paramsUri?.getQueryParameter("roomId")
             val text = intent.getStringExtra("text")
+                ?: paramsUri?.getQueryParameter("text")
 
             if (roomId == null || text == null) {
-                sendResult(context, false, error = "Missing roomId or text extra for insert")
+                sendResult(
+                    context, false,
+                    error = "Missing roomId or text. Provide as extras or inside the params string (e.g. params=\"roomId=!id:server.com&text=hello\")"
+                )
                 return
             }
 
-            // Build insert URI
-            val encodedText = android.net.Uri.encode(text)
-            val insertUri = buildUri("messages", "roomId=$roomId&text=$encodedText")
+            // Merge any extra params from the params string into the URI (excluding roomId/text
+            // which are already handled above to avoid duplicates).
+            val uriBuilder = android.net.Uri.Builder()
+                .scheme("content")
+                .authority(BEEPER_AUTHORITY)
+                .appendEncodedPath(path)
+                .appendQueryParameter("roomId", roomId)
+                .appendQueryParameter("text", text)
 
-            val resultUri = context.contentResolver.insert(insertUri, null)
+            paramsUri?.queryParameterNames
+                ?.filter { it != "roomId" && it != "text" }
+                ?.forEach { key ->
+                    val value = paramsUri.getQueryParameter(key)
+                    if (value != null) uriBuilder.appendQueryParameter(key, value)
+                }
+
+            val resultUri = context.contentResolver.insert(uriBuilder.build(), null)
             if (resultUri != null) {
                 val messageId = resultUri.getQueryParameter("messageId") ?: "unknown"
                 val result = mapOf("messageId" to messageId, "roomId" to roomId)

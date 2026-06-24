@@ -88,31 +88,14 @@
     </LinearLayout>
 
     <!-- App list (hidden until loaded) -->
-    <androidx.core.widget.NestedScrollView
-        android:id="@+id/scroll_app_list"
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recycler_app_list"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:visibility="gone">
+        android:paddingBottom="16dp"
+        android:clipToPadding="false"
+        android:visibility="gone" />
 
-        <LinearLayout
-            android:id="@+id/app_list_container"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:paddingBottom="16dp" />
-
-    </androidx.core.widget.NestedScrollView>
-
-    <com.google.android.material.bottomnavigation.BottomNavigationView
-        android:id="@+id/bottom_nav"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@color/card_bg"
-        app:itemIconTint="@color/nav_item_color"
-        app:itemTextColor="@color/nav_item_color"
-        app:labelVisibilityMode="labeled"
-        android:elevation="8dp"
-        app:menu="@menu/bottom_nav_menu" />
 
 </LinearLayout>
