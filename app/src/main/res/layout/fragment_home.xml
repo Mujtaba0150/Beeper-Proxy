@@ -84,23 +84,23 @@
                     android:orientation="horizontal">
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_copy_token"
+                        style="@style/Widget.BeeperProxy.Button"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="Copy"
                         android:textColor="@color/text_primary"
                         app:backgroundTint="@color/btn_secondary"
-                        app:cornerRadius="8dp"
                         android:layout_marginEnd="8dp" />
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_refresh_token"
+                        style="@style/Widget.BeeperProxy.Button"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="Refresh Token"
                         app:backgroundTint="@color/accent"
-                        android:textColor="@color/bg_dark"
-                        app:cornerRadius="8dp" />
+                        android:textColor="@color/bg_dark" />
                 </LinearLayout>
             </LinearLayout>
         </androidx.cardview.widget.CardView>
@@ -155,12 +155,12 @@
                     android:layout_marginBottom="14dp" />
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_request_permissions"
+                    style="@style/Widget.BeeperProxy.Button"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="Grant Beeper Permissions"
                     app:backgroundTint="@color/accent"
-                    android:textColor="@color/bg_dark"
-                    app:cornerRadius="8dp" />
+                    android:textColor="@color/bg_dark" />
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
@@ -193,33 +193,33 @@
                     android:layout_marginBottom="10dp">
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_test_chats"
+                        style="@style/Widget.BeeperProxy.Button"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="Chats"
                         android:textColor="@color/text_primary"
                         app:backgroundTint="@color/btn_secondary"
-                        app:cornerRadius="8dp"
                         android:layout_marginEnd="6dp" />
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_test_messages"
+                        style="@style/Widget.BeeperProxy.Button"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="Messages"
                         android:textColor="@color/text_primary"
                         app:backgroundTint="@color/btn_secondary"
-                        app:cornerRadius="8dp"
                         android:layout_marginEnd="6dp" />
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_test_contacts"
+                        style="@style/Widget.BeeperProxy.Button"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="Contacts"
                         android:textColor="@color/text_primary"
-                        app:backgroundTint="@color/btn_secondary"
-                        app:cornerRadius="8dp" />
+                        app:backgroundTint="@color/btn_secondary" />
                 </LinearLayout>
                 <LinearLayout
                     android:id="@+id/group_test_loading"

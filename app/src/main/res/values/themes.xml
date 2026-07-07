@@ -26,4 +26,24 @@
     <style name="BeeperNavIndicator">
         <item name="android:color">@android:color/transparent</item>
     </style>
+
+    <!-- Standard button for Home screen cards: fixed height, single-line text
+         that shrinks to fit instead of wrapping, so all buttons in a row/section
+         line up regardless of label length. -->
+    <style name="Widget.BeeperProxy.Button" parent="Widget.MaterialComponents.Button">
+        <item name="android:textAllCaps">false</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:paddingStart">8dp</item>
+        <item name="android:paddingEnd">8dp</item>
+        <item name="android:textSize">14sp</item>
+        <item name="autoSizeTextType">uniform</item>
+        <item name="autoSizeMinTextSize">10sp</item>
+        <item name="autoSizeMaxTextSize">14sp</item>
+        <item name="autoSizeStepGranularity">1sp</item>
+        <item name="cornerRadius">8dp</item>
+    </style>
 </resources>
