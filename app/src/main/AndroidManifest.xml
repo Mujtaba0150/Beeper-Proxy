@@ -40,6 +40,16 @@
             </intent-filter>
         </receiver>
 
+        <!-- Blacklists newly installed apps by default -->
+        <receiver
+            android:name=".PackageInstallReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PACKAGE_ADDED" />
+                <data android:scheme="package" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
     <queries>

@@ -64,6 +64,10 @@ class AppsFragment : Fragment() {
             adapter.updateBlocked(emptySet())
         }
 
+        binding.switchSortTop.setOnCheckedChangeListener { _, isChecked ->
+            adapter.setSortBlockedToTop(isChecked)
+        }
+
         loadApps()
     }
 

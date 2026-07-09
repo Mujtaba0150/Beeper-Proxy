@@ -1,5 +1,7 @@
 # Beeper Proxy
 
+> **Disclaimer:** Beeper Proxy is an independent, community-built project and is not affiliated with, endorsed by, or sponsored by Beeper. "Beeper" is a trademark of its respective owner; it is referenced here only to describe interoperability with Beeper's Android content-provider APIs.
+
 An Android app that acts as a **secure proxy** in front of Beeper's ContentProvider APIs. Automation apps like Tasker and Automate lack the custom runtime permissions Beeper requires — Beeper Proxy holds those permissions and re-exposes the same data behind an auth-token-protected interface those apps can actually reach.
 
 ---
@@ -367,6 +369,16 @@ adb shell am broadcast \
 - **The ContentProvider is exported** — Any app on the device can attempt to query it. The auth token and blacklist are the only access controls, so treat the token like a password.
 
 ---
+
+## Trademarks & Branding
+
+This project uses its own name, icon, and visual identity — it does not use Beeper's logo, colors, or branding, and should not be mistaken for an official Beeper product. "Beeper" and any related marks belong to their respective owner.
+
+## Project Docs
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) — component overview and data flow
+- [SECURITY.md](SECURITY.md) — threat model and vulnerability reporting
+- [LICENSE](LICENSE) — MIT
 
 ## References
 
